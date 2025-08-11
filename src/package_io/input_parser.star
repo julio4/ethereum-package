@@ -14,6 +14,7 @@ DEFAULT_EL_IMAGES = {
     "reth": "ghcr.io/paradigmxyz/reth",
     "ethereumjs": "ethpandaops/ethereumjs:master",
     "nimbus": "statusim/nimbus-eth1:master",
+    "ethrex": "ghcr.io/lambdaclass/ethrex:latest",
 }
 
 DEFAULT_CL_IMAGES = {
@@ -293,6 +294,23 @@ def input_parser(plan, input_args):
             "Fulu fork must happen before BPO 1, please adjust the epochs accordingly."
         )
 
+    if result["network_params"]["fulu_fork_epoch"] != constants.FAR_FUTURE_EPOCH:
+        has_supernodes = False
+        for participant in result["participants"]:
+            if participant.get("supernode", False):
+                has_supernodes = True
+                break
+
+        if (
+            not has_supernodes
+            and not result["network_params"]["perfect_peerdas_enabled"]
+        ):
+            fail(
+                "Fulu fork is enabled (epoch: {0}) but no supernodes are configured in the participant list and perfect_peerdas_enabled is not enabled. Either configure supernodes for some participants or enable perfect_peerdas_enabled in network_params and have 16 participants.".format(
+                    str(result["network_params"]["fulu_fork_epoch"])
+                )
+            )
+
     return struct(
         participants=[
             struct(
@@ -301,6 +319,7 @@ def input_parser(plan, input_args):
                 el_log_level=participant["el_log_level"],
                 el_volume_size=participant["el_volume_size"],
                 el_extra_params=participant["el_extra_params"],
+                el_extra_mounts=participant["el_extra_mounts"],
                 el_extra_env_vars=participant["el_extra_env_vars"],
                 el_extra_labels=participant["el_extra_labels"],
                 el_tolerations=participant["el_tolerations"],
@@ -316,8 +335,10 @@ def input_parser(plan, input_args):
                 vc_log_level=participant["vc_log_level"],
                 vc_tolerations=participant["vc_tolerations"],
                 cl_extra_params=participant["cl_extra_params"],
+                cl_extra_mounts=participant["cl_extra_mounts"],
                 cl_extra_labels=participant["cl_extra_labels"],
                 vc_extra_params=participant["vc_extra_params"],
+                vc_extra_mounts=participant["vc_extra_mounts"],
                 vc_extra_env_vars=participant["vc_extra_env_vars"],
                 vc_extra_labels=participant["vc_extra_labels"],
                 use_remote_signer=participant["use_remote_signer"],
@@ -1195,6 +1216,7 @@ def default_participant():
         "el_extra_env_vars": {},
         "el_extra_labels": {},
         "el_extra_params": [],
+        "el_extra_mounts": {},
         "el_tolerations": [],
         "el_volume_size": 0,
         "el_min_cpu": 0,
@@ -1207,6 +1229,7 @@ def default_participant():
         "cl_extra_env_vars": {},
         "cl_extra_labels": {},
         "cl_extra_params": [],
+        "cl_extra_mounts": {},
         "cl_tolerations": [],
         "cl_volume_size": 0,
         "cl_min_cpu": 0,
@@ -1221,6 +1244,7 @@ def default_participant():
         "vc_extra_env_vars": {},
         "vc_extra_labels": {},
         "vc_extra_params": [],
+        "vc_extra_mounts": {},
         "vc_tolerations": [],
         "vc_min_cpu": 0,
         "vc_max_cpu": 0,

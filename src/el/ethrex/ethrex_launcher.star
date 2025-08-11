@@ -2,31 +2,46 @@ shared_utils = import_module("../../shared_utils/shared_utils.star")
 input_parser = import_module("../../package_io/input_parser.star")
 el_context = import_module("../../el/el_context.star")
 el_admin_node_info = import_module("../../el/el_admin_node_info.star")
-el_shared = import_module("../el_shared.star")
 node_metrics = import_module("../../node_metrics_info.star")
 constants = import_module("../../package_io/constants.star")
-
-# The dirpath of the execution data directory on the client container
-EXECUTION_DATA_DIRPATH_ON_CLIENT_CONTAINER = "/data/besu/execution-data"
-
-METRICS_PATH = "/metrics"
+el_shared = import_module("../el_shared.star")
 
 RPC_PORT_NUM = 8545
 WS_PORT_NUM = 8546
 DISCOVERY_PORT_NUM = 30303
-ENGINE_HTTP_RPC_PORT_NUM = 8551
+ENGINE_RPC_PORT_NUM = 8551
 METRICS_PORT_NUM = 9001
 
-JAVA_OPTS = {"JAVA_OPTS": "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n"}
+# Paths
+METRICS_PATH = "/metrics"
+EXECUTION_DATA_DIRPATH_ON_CLIENT_CONTAINER = "/data/ethrex/execution-data"
 
-ENTRYPOINT_ARGS = ["sh", "-c"]
+
+def get_used_ports(discovery_port):
+    used_ports = {
+        constants.RPC_PORT_ID: shared_utils.new_port_spec(
+            RPC_PORT_NUM,
+            shared_utils.TCP_PROTOCOL,
+            shared_utils.HTTP_APPLICATION_PROTOCOL,
+        ),
+        constants.ENGINE_RPC_PORT_ID: shared_utils.new_port_spec(
+            ENGINE_RPC_PORT_NUM, shared_utils.TCP_PROTOCOL
+        ),
+        constants.METRICS_PORT_ID: shared_utils.new_port_spec(
+            METRICS_PORT_NUM,
+            shared_utils.TCP_PROTOCOL,
+            shared_utils.HTTP_APPLICATION_PROTOCOL,
+        ),
+    }
+    return used_ports
+
 
 VERBOSITY_LEVELS = {
-    constants.GLOBAL_LOG_LEVEL.error: "ERROR",
-    constants.GLOBAL_LOG_LEVEL.warn: "WARN",
-    constants.GLOBAL_LOG_LEVEL.info: "INFO",
-    constants.GLOBAL_LOG_LEVEL.debug: "DEBUG",
-    constants.GLOBAL_LOG_LEVEL.trace: "TRACE",
+    constants.GLOBAL_LOG_LEVEL.error: "1",
+    constants.GLOBAL_LOG_LEVEL.warn: "2",
+    constants.GLOBAL_LOG_LEVEL.info: "3",
+    constants.GLOBAL_LOG_LEVEL.debug: "4",
+    constants.GLOBAL_LOG_LEVEL.trace: "5",
 }
 
 
@@ -87,10 +102,6 @@ def get_config(
     participant_index,
     network_params,
 ):
-    log_level = input_parser.get_client_log_level_or_default(
-        participant.el_log_level, global_log_level, VERBOSITY_LEVELS
-    )
-
     public_ports = {}
     public_ports_for_component = None
     if port_publisher.el_enabled:
@@ -102,7 +113,7 @@ def get_config(
         )
         additional_public_port_assignments = {
             constants.RPC_PORT_ID: public_ports_for_component[3],
-            constants.WS_PORT_ID: public_ports_for_component[4],
+            # constants.WS_PORT_ID: public_ports_for_component[4],
         }
         public_ports.update(
             shared_utils.get_port_specs(additional_public_port_assignments)
@@ -122,62 +133,32 @@ def get_config(
     used_port_assignments = {
         constants.TCP_DISCOVERY_PORT_ID: discovery_port_tcp,
         constants.UDP_DISCOVERY_PORT_ID: discovery_port_udp,
-        constants.ENGINE_RPC_PORT_ID: ENGINE_HTTP_RPC_PORT_NUM,
-        constants.METRICS_PORT_ID: METRICS_PORT_NUM,
+        constants.ENGINE_RPC_PORT_ID: ENGINE_RPC_PORT_NUM,
         constants.RPC_PORT_ID: RPC_PORT_NUM,
-        constants.WS_PORT_ID: WS_PORT_NUM,
+        # constants.WS_PORT_ID: WS_PORT_NUM,
+        constants.METRICS_PORT_ID: METRICS_PORT_NUM,
     }
     used_ports = shared_utils.get_port_specs(used_port_assignments)
 
     cmd = [
-        "besu",
-        "--logging=" + log_level,
-        "--data-path=" + EXECUTION_DATA_DIRPATH_ON_CLIENT_CONTAINER,
-        "--host-allowlist=*",
-        "--rpc-http-enabled=true",
-        "--rpc-http-host=0.0.0.0",
-        "--rpc-http-port={0}".format(RPC_PORT_NUM),
-        "--rpc-http-api=ADMIN,CLIQUE,ETH,NET,DEBUG,TXPOOL,ENGINE,TRACE,WEB3",
-        "--rpc-http-cors-origins=*",
-        "--rpc-http-max-active-connections=300",
-        "--rpc-ws-enabled=true",
-        "--rpc-ws-host=0.0.0.0",
-        "--rpc-ws-port={0}".format(WS_PORT_NUM),
-        "--rpc-ws-api=ADMIN,CLIQUE,ETH,NET,DEBUG,TXPOOL,ENGINE,TRACE,WEB3",
-        "--p2p-enabled=true",
-        "--p2p-host=" + port_publisher.el_nat_exit_ip,
-        "--p2p-port={0}".format(discovery_port_tcp),
-        "--engine-rpc-enabled=true",
-        "--engine-jwt-secret=" + constants.JWT_MOUNT_PATH_ON_CONTAINER,
-        "--engine-host-allowlist=*",
-        "--engine-rpc-port={0}".format(ENGINE_HTTP_RPC_PORT_NUM),
-        "{0}".format(
-            "--sync-mode=FULL"
-            if network_params.network in constants.NETWORK_NAME.kurtosis
-            else "--sync-mode=SNAP"
+        "--datadir=" + EXECUTION_DATA_DIRPATH_ON_CLIENT_CONTAINER,
+        "--network={0}".format(
+            network_params.network
+            if network_params.network in constants.PUBLIC_NETWORKS
+            else constants.GENESIS_CONFIG_MOUNT_PATH_ON_CONTAINER + "/genesis.json"
         ),
-        "--metrics-enabled=true",
-        "--metrics-host=0.0.0.0",
-        "--metrics-port={0}".format(METRICS_PORT_NUM),
-        "--min-gas-price=1000000000",
+        "--http.port={0}".format(RPC_PORT_NUM),
+        "--http.addr=0.0.0.0",
+        "--authrpc.port={0}".format(ENGINE_RPC_PORT_NUM),
+        "--authrpc.jwtsecret=" + constants.JWT_MOUNT_PATH_ON_CONTAINER,
+        "--authrpc.addr=0.0.0.0",
+        "--p2p.port={0}".format(discovery_port_tcp),
+        "--discovery.port={0}".format(discovery_port_udp),
+        "--metrics",
+        "--metrics.addr=0.0.0.0",
+        "--metrics.port={0}".format(METRICS_PORT_NUM),
     ]
-
-    if network_params.gas_limit > 0:
-        cmd.append("--target-gas-limit={0}".format(network_params.gas_limit))
-
-    if network_params.network not in constants.PUBLIC_NETWORKS:
-        cmd.append(
-            "--genesis-file="
-            + constants.GENESIS_CONFIG_MOUNT_PATH_ON_CONTAINER
-            + "/besu.json"
-        )
-    else:
-        cmd.append("--network=" + network_params.network)
-
-    if (
-        network_params.network == constants.NETWORK_NAME.kurtosis
-        or constants.NETWORK_NAME.shadowfork in network_params.network
-    ):
+    if network_params.network == constants.NETWORK_NAME.kurtosis:
         if len(existing_el_clients) > 0:
             cmd.append(
                 "--bootnodes="
@@ -200,12 +181,16 @@ def get_config(
         )
 
     if len(participant.el_extra_params) > 0:
-        # we do this as extra_params isn't a normal [] but a proto repeated array
+        # this is a repeated<proto type>, we convert it into Starlark
         cmd.extend([param for param in participant.el_extra_params])
 
     cmd_str = " ".join(cmd)
+    if network_params.network not in constants.PUBLIC_NETWORKS:
+        subcommand_strs = [cmd_str]
+    else:
+        subcommand_strs = [cmd_str]
 
-    env_vars = participant.el_extra_env_vars | JAVA_OPTS
+    command_str = " && ".join(subcommand_strs)
 
     files = {
         constants.GENESIS_DATA_MOUNTPOINT_ON_CLIENTS: launcher.el_cl_genesis_data.files_artifact_uuid,
@@ -221,7 +206,7 @@ def get_config(
             size=int(participant.el_volume_size)
             if int(participant.el_volume_size) > 0
             else constants.VOLUME_SIZE[volume_size_key][
-                constants.EL_TYPE.besu + "_volume_size"
+                constants.EL_TYPE.ethrex + "_volume_size"
             ],
         )
 
@@ -236,13 +221,12 @@ def get_config(
         "image": participant.el_image,
         "ports": used_ports,
         "public_ports": public_ports,
-        "cmd": [cmd_str],
+        "cmd": cmd,
         "files": files,
-        "entrypoint": ENTRYPOINT_ARGS,
         "private_ip_address_placeholder": constants.PRIVATE_IP_ADDRESS_PLACEHOLDER,
-        "env_vars": env_vars,
+        "env_vars": participant.el_extra_env_vars,
         "labels": shared_utils.label_maker(
-            client=constants.EL_TYPE.besu,
+            client=constants.EL_TYPE.ethrex,
             client_type=constants.CLIENT_TYPES.el,
             image=participant.el_image[-constants.MAX_LABEL_LENGTH :],
             connected_client=cl_client_name,
@@ -250,7 +234,6 @@ def get_config(
             | {constants.NODE_INDEX_LABEL_KEY: str(participant_index + 1)},
             supernode=participant.supernode,
         ),
-        "user": User(uid=0, gid=0),
         "tolerations": tolerations,
         "node_selectors": node_selectors,
     }
@@ -263,43 +246,43 @@ def get_config(
         config_args["min_memory"] = participant.el_min_mem
     if participant.el_max_mem > 0:
         config_args["max_memory"] = participant.el_max_mem
+
     return ServiceConfig(**config_args)
 
 
-# makes request to [service_name] for enode and returns a full el_context
+# makes request to [service_name] for enode and enr and returns a full el_context
 def get_el_context(
     plan,
     service_name,
     service,
     launcher,
 ):
-    enode = el_admin_node_info.get_enode_for_node(
+    enode, enr = el_admin_node_info.get_enode_enr_for_node(
         plan, service_name, constants.RPC_PORT_ID
     )
 
     metrics_url = "{0}:{1}".format(service.ip_address, METRICS_PORT_NUM)
-    besu_metrics_info = node_metrics.new_node_metrics_info(
+    ethrex_metrics_info = node_metrics.new_node_metrics_info(
         service_name, METRICS_PATH, metrics_url
     )
+
     http_url = "http://{0}:{1}".format(service.ip_address, RPC_PORT_NUM)
-    ws_url = "ws://{0}:{1}".format(service.ip_address, WS_PORT_NUM)
+    # ws_url = "ws://{0}:{1}".format(service.ip_address, WS_PORT_NUM)
 
     return el_context.new_el_context(
-        client_name="besu",
+        client_name="ethrex",
         enode=enode,
         ip_addr=service.ip_address,
         rpc_port_num=RPC_PORT_NUM,
         ws_port_num=WS_PORT_NUM,
-        engine_rpc_port_num=ENGINE_HTTP_RPC_PORT_NUM,
+        engine_rpc_port_num=ENGINE_RPC_PORT_NUM,
         rpc_http_url=http_url,
-        ws_url=ws_url,
+        # ws_url=ws_url,
+        enr=enr,
         service_name=service_name,
-        el_metrics_info=[besu_metrics_info],
+        el_metrics_info=[ethrex_metrics_info],
     )
 
 
-def new_besu_launcher(el_cl_genesis_data, jwt_file):
-    return struct(
-        el_cl_genesis_data=el_cl_genesis_data,
-        jwt_file=jwt_file,
-    )
+def new_ethrex_launcher(el_cl_genesis_data, jwt_file):
+    return struct(el_cl_genesis_data=el_cl_genesis_data, jwt_file=jwt_file)

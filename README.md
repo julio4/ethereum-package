@@ -175,6 +175,7 @@ participants:
     # - reth: ghcr.io/paradigmxyz/reth
     # - ethereumjs: ethpandaops/ethereumjs:master
     # - nimbus-eth1: ethpandaops/nimbus-eth1:master
+    # - ethrex: ghcr.io/lambdaclass/ethrex:latest
     el_image: ""
 
     # The log level string that this participant's EL client should log at
@@ -193,6 +194,11 @@ participants:
 
     # A list of optional extra params that will be passed to the EL client container for modifying its behaviour
     el_extra_params: []
+
+    # A list of optional extra mount points that will be passed to the EL client container
+    # Key is the path in the container, value is the local path to the file
+    # Example: el_extra_mounts: {"/tmp/custom.yaml": "local_directory/custom.yaml"}
+    el_extra_mounts: {}
 
     # A list of tolerations that will be passed to the EL client container
     # Only works with Kubernetes
@@ -251,6 +257,11 @@ participants:
     # A list of optional extra params that will be passed to the CL client Beacon container for modifying its behaviour
     # If the client combines the Beacon & validator nodes (e.g. Teku, Nimbus), then this list will be passed to the combined Beacon-validator node
     cl_extra_params: []
+
+    # A list of optional extra mount points that will be passed to the CL client container
+    # Key is the path in the container, value is the local path to the file
+    # Example: cl_extra_mounts: {"/tmp/custom.yaml": "local_directory/custom.yaml"}
+    cl_extra_mounts: {}
 
     # A list of tolerations that will be passed to the CL client container
     # Only works with Kubernetes
@@ -321,6 +332,11 @@ participants:
     # A list of optional extra params that will be passed to the validator client container for modifying its behaviour
     # If the client combines the Beacon & validator nodes (e.g. Teku, Nimbus), then this list will also be passed to the combined Beacon-validator node
     vc_extra_params: []
+
+    # A list of optional extra mount points that will be passed to the validator client container
+    # Key is the path in the container, value is the local path to the file
+    # Example: vc_extra_mounts: {"/tmp/custom.yaml": "local_directory/custom.yaml"}
+    vc_extra_mounts: {}
 
     # A list of tolerations that will be passed to the validator container
     # Only works with Kubernetes
@@ -1061,7 +1077,7 @@ spamoor_params:
 # Ethereum genesis generator params
 ethereum_genesis_generator_params:
   # The image to use for ethereum genesis generator
-  image: ethpandaops/ethereum-genesis-generator:4.1.19
+  image: ethpandaops/ethereum-genesis-generator:5.0.0
 
 # Configuration for public ports and NAT exit IP addresses
 port_publisher:
@@ -1316,6 +1332,43 @@ ethereum_metrics_exporter_enabled: true
 ```
 
 </details>
+
+## Using Extra Mounts
+
+The `el_extra_mounts`, `cl_extra_mounts`, and `vc_extra_mounts` parameters allow you to mount additional files or directories into the EL, CL, and VC containers respectively. This is useful for providing custom configuration files, certificates, or other data that your clients need.
+
+### How it works
+
+The extra mounts feature automatically handles file uploads for you:
+- **Relative paths** within the package (e.g., `static_files/config.toml`) are automatically uploaded as artifacts
+- **Existing artifact names** (e.g., `jwt_file`) are used directly
+- Files are mounted at the specified container paths
+
+### Example: Using Built-in Artifacts
+
+```yaml
+participants:
+  - el_type: geth
+    cl_type: lighthouse
+    el_extra_mounts:
+      "/custom/jwt/path": "jwt_file"  # jwt_file is a built-in artifact
+```
+
+### Example: Mounting Files from local directory
+
+```yaml
+participants:
+  - el_type: geth
+    cl_type: lighthouse
+    cl_extra_mounts:
+      "/lighthouse/custom.yaml": "local_directory/lighthouse/custom.yaml"
+```
+
+### Notes
+
+- All file paths must be relative to the package root directory
+- Files outside the package directory cannot be mounted directly
+- The entire directory structure is preserved when mounting directories
 
 ## Beacon Node <> Validator Client compatibility
 

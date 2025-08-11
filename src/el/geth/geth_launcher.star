@@ -234,16 +234,15 @@ def get_config(
         network_params.network == constants.NETWORK_NAME.kurtosis
         or constants.NETWORK_NAME.shadowfork in network_params.network
     ):
-        if len(existing_el_clients) > 0:
-            cmd.append(
-                "--bootnodes="
-                + ",".join(
-                    [
-                        ctx.enode
-                        for ctx in existing_el_clients[: constants.MAX_ENODE_ENTRIES]
-                    ]
-                )
+        cmd.append(
+            "--bootnodes="
+            + ",".join(
+                [
+                    ctx.enode
+                    for ctx in existing_el_clients[: constants.MAX_ENODE_ENTRIES]
+                ]
             )
+        )
         if constants.NETWORK_NAME.shadowfork in network_params.network:  # shadowfork
             if launcher.osaka_enabled:
                 cmd.append("--override.osaka=" + str(launcher.osaka_time))
@@ -289,6 +288,14 @@ def get_config(
                 constants.EL_TYPE.geth + "_volume_size"
             ],
         )
+
+    # Add extra mounts - automatically handle file uploads
+    processed_mounts = shared_utils.process_extra_mounts(
+        plan, participant.el_extra_mounts
+    )
+    for mount_path, artifact in processed_mounts.items():
+        files[mount_path] = artifact
+
     env_vars = participant.el_extra_env_vars
     config_args = {
         "image": participant.el_image,
